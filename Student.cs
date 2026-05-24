@@ -1,99 +1,90 @@
 ﻿using System;
-using System.Text.RegularExpressions;
-
-namespace StudentManagement;
-
-public class Student
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+namespace Praktychna1
 {
-    private string _fullName = string.Empty;
-    private string _personalEmail = string.Empty;
-    private string _recordBookNumber = string.Empty;
-
-    public required string RecordBookNumber
+    public enum StudentStatus { Active, AcademicLeave, Expelled, Graduated }
+    // Додано ICloneable для виконання додаткових вимог 
+    public class Student : ICloneable
     {
-        get => _recordBookNumber;
-        set
+        private string _fullName;
+        private string _recordBookNumber;
+        // Додано одновимірний масив оцінок за лабораторні (10 елементів) 
+        public byte[] LabGrades { get; private set; } = new byte[10];
+        public string FullName
         {
-            if (value.Length != 8 || !long.TryParse(value, out _))
-                throw new ArgumentException("Номер залікової книжки має складатись рівно з 8 цифр.");
-            _recordBookNumber = value;
+            get => _fullName;
+            set
+            {
+                if (string.IsNullOrWhiteSpace(value) || value.Length < 5)
+                    throw new ArgumentException("ПІБ має містити мінімум 5 символів");
+                _fullName = value;
+            }
         }
-    }
-
-    public string FullName
-    {
-        get => _fullName;
-        set
+        public DateTime DateOfBirth { get; init; }
+        public int Age => DateTime.Now.Year - DateOfBirth.Year;
+        public required string RecordBookNumber
         {
-            if (string.IsNullOrWhiteSpace(value) || value.Length < 5)
-                throw new ArgumentException("ПІБ не може бути порожнім і має містити мінімум 5 символів.");
-            _fullName = value;
+            get => _recordBookNumber;
+            set
+            {
+                if (value?.Length != 8 || !long.TryParse(value, out _))
+                    throw new ArgumentException("Номер заліковки має містити рівно 8 цифр");
+                _recordBookNumber = value;
+            }
         }
-    }
 
-    public DateTime DateOfBirth { get; init; }
 
-    public int Age
-    {
-        get
+        public GradeJournal Journal { get; } = new GradeJournal();
+        public double AverageGrade => Journal.CalculateAverage();
+        public StudentStatus Status { get; set; }
+        public DateTime EnrollmentDate { get; init; } = DateTime.Now;
+        public string PersonalEmail { get; set; }
+        public string Notes { get; set; }
+        // Метод додавання оцінки за лабораторну
+        public void AddLabGrade(int labNumber, byte grade)
         {
-            var today = DateTime.Today;
-            var age = today.Year - DateOfBirth.Year;
-            if (DateOfBirth.Date > today.AddYears(-age)) age--;
-            return age;
+            // Перевірка індексу для обробки винятків
+            if (labNumber < 0 || labNumber >= LabGrades.Length)
+                throw new IndexOutOfRangeException("Номер лабораторної має бути від 0 до 9");
+            LabGrades[labNumber] = grade;
         }
-    }
-
-    public double AverageGrade { get; private set; }
-
-    public StudentStatus Status { get; set; } = StudentStatus.Active;
-    public DateTime EnrollmentDate { get; init; } = DateTime.Now;
-    public string Notes { get; set; } = string.Empty;
-
-    public string PersonalEmail
-    {
-        get => _personalEmail;
-        set
+        // Метод отримання середнього балу за лабораторні
+        public double GetAverageLabGrade()
         {
-            if (!Regex.IsMatch(value, @"^[^@\s]+@[^@\s]+\.[^@\s]+$"))
-                throw new ArgumentException("Некоректний формат email.");
-            _personalEmail = value;
+            if (LabGrades.Length == 0) return 0;
+            int sum = 0;
+            for (int i = 0; i < LabGrades.Length; i++)
+            {
+                sum += LabGrades[i];
+            }
+            return (double)sum / LabGrades.Length;
         }
-    }
+        public bool IsExcellent() => AverageGrade >= 90;
+        public bool IsFailing() => AverageGrade < 60;
+        public int GetYearsToGraduation() => 4 - (DateTime.Now.Year - EnrollmentDate.Year);
+        // Використання StringBuilder замість конкатенації рядків (+) 
+        public void ShowDetailedInfo()
+        {
+            StringBuilder sb = new StringBuilder();
+            sb.AppendFormat("[Студент] {0} | Квиток: {1} | Вік: {2} | Сер. бал: {3:F2}\n",
+                FullName, RecordBookNumber, Age, AverageGrade);
+            sb.Append("   Оцінки (Journal): ").AppendLine(Journal.GetGradesSummary());
+            // Вивід масиву лабораторних
+            sb.Append("   Лабораторні роботи: ").AppendLine(string.Join(", ",
 
-    public GradeJournal Journal { get; } = new();
-
-    public void UpdateAverageGrade()
-    {
-        AverageGrade = Journal.CalculateAverage();
-    }
-
-    public void AddGrade(string subject, double grade)
-    {
-        if (grade < 0 || grade > 100) throw new ArgumentException("Оцінка має бути від 0 до 100.");
-        Journal.Grades[subject] = grade;
-        UpdateAverageGrade();
-    }
-
-    public bool IsExcellent() => AverageGrade >= 90;
-
-    public bool IsFailing() => AverageGrade < 60;
-
-    public int GetYearsToGraduation(int totalProgramYears = 4)
-    {
-        int yearsStudied = DateTime.Now.Year - EnrollmentDate.Year;
-        int yearsLeft = totalProgramYears - yearsStudied;
-        return yearsLeft > 0 ? yearsLeft : 0;
-    }
-
-    public void ShowDetailedInfo()
-    {
-        Console.WriteLine("=====================================");
-        Console.WriteLine($"Студент: {FullName} (Залікова: {RecordBookNumber})");
-        Console.WriteLine($"Вік: {Age}");
-        Console.WriteLine($"Email: {PersonalEmail}");
-        Console.WriteLine($"Статус: {Status}");
-        Console.WriteLine($"Середній бал: {AverageGrade}");
-        Console.WriteLine("=====================================");
+LabGrades));
+            sb.AppendFormat("   Сер. бал лаб: {0:F2}\n", GetAverageLabGrade());
+            Console.WriteLine(sb.ToString());
+        }
+        // Реалізація клонування 
+        public object Clone()
+        {
+            var clone = (Student)this.MemberwiseClone();
+            clone.LabGrades = (byte[])this.LabGrades.Clone(); // Глибоке копіювання масиву
+            return clone;
+        }
     }
 }
